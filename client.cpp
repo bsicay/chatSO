@@ -68,7 +68,7 @@ void messageListener(int sock)
   while (running)
   {
     chat::Response response;
-    if (RPM(sock, response))
+    if (receive_request(sock, response))
     {
       std::lock_guard<std::mutex> lock(cout_mutex);
       std::string message;
@@ -180,7 +180,7 @@ void handleBroadcastMessage(int sock, const std::string &message)
   auto *msg = request.mutable_send_message();
   msg->set_content(message);
 
-  SPM(sock, request);
+  send_response(sock, request);
 }
 
 void handleDirectMessage(int sock, const std::string &recipient, const std::string &message)
@@ -191,7 +191,7 @@ void handleDirectMessage(int sock, const std::string &recipient, const std::stri
   msg->set_content(message);
   msg->set_recipient(recipient);
 
-  SPM(sock, request);
+  send_response(sock, request);
 }
 
 bool handleChangeStatus(int sock, const std::string &status)
@@ -218,7 +218,7 @@ bool handleChangeStatus(int sock, const std::string &status)
     return false;
   }
 
-  SPM(sock, request);
+  send_response(sock, request);
   return true;
 }
 
@@ -228,7 +228,7 @@ void handleListUsers(int sock)
   request.set_operation(chat::Operation::GET_USERS);
   auto *user_list = request.mutable_get_users();
 
-  SPM(sock, request);
+  send_response(sock, request);
 }
 
 void handleGetUserInfo(int sock, const std::string &username)
@@ -238,7 +238,7 @@ void handleGetUserInfo(int sock, const std::string &username)
   auto *user_list = request.mutable_get_users();
   user_list->set_username(username);
 
-  SPM(sock, request);
+  send_response(sock, request);
 }
 
 void handleUnregisterUser(int sock, const std::string &username)
@@ -248,7 +248,7 @@ void handleUnregisterUser(int sock, const std::string &username)
   auto *unregister_user = request.mutable_unregister_user();
   unregister_user->set_username(username);
 
-  SPM(sock, request);
+  send_response(sock, request);
 }
 
 int main(int argc, char *argv[])
@@ -293,10 +293,10 @@ int main(int argc, char *argv[])
   auto *new_user = request.mutable_register_user();
   new_user->set_username(username);
 
-  SPM(sock, request);
+  send_response(sock, request);
 
   chat::Response response;
-  if (RPM(sock, response))
+  if (receive_request(sock, response))
   {
     if (response.status_code() != chat::StatusCode::OK)
     {
@@ -465,7 +465,7 @@ int main(int argc, char *argv[])
         // 2. Send the unregister request
         handleUnregisterUser(sock, username);
         // 3. Wait for the server to respond
-        if (RPM(sock, response))
+        if (receive_request(sock, response))
         {
           std::cout << "SERVER: " << response.message() << std::endl;
         }
