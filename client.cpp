@@ -167,7 +167,6 @@ void displayHelp()
   std::cout << "    status <status>\n";
   std::cout << "    list\n";
   std::cout << "    info <username>\n";
-  std::cout << "    help\n";
   std::cout << "    stream\n";
   std::cout << "    exit\n\n";
   std::cout << RESET;
