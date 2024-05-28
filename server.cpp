@@ -22,6 +22,8 @@
 #include <cstring>  // For memcpy
 #include <unistd.h> // For ssize_t
 #include <cerrno>   // For errno
+#include "./messageUtil/constants.h"
+
 
 // Declaración de variables globales
 volatile sig_atomic_t running = 1; // Variable para mantener el servidor en ejecución
@@ -30,6 +32,7 @@ int server_fd; // Descriptor del socket del servidor
 // Estructuras de datos para manejar usuarios y sesiones
 std::map<int, std::string> client_sessions; // Mapa de descriptores de socket a nombres de usuario
 std::map<std::string, std::string> user_details; // Mapa de nombres de usuario a direcciones IP
+std::map<std::string, chat::UserStatus> user_status;                      // Maps username to status
 std::mutex clients_mutex;  // Mutex para controlar el acceso a las estructuras de datos compartidas
 std::map<std::string, std::chrono::steady_clock::time_point> last_active;
 std::mutex activity_mutex;
@@ -80,7 +83,7 @@ void send_message_to_client(int client_sock, const chat::IncomingMessageResponse
 void update_inactivity() {
     std::lock_guard<std::mutex> lock(activity_mutex);
     for (auto& user : last_active) {
-        if (std::chrono::duration_cast<std::chrono::minutes>(std::chrono::steady_clock::now() - user.second).count() > INACTIVITY_LIMIT) {
+        if (std::chrono::duration_cast<std::chrono::minutes>(std::chrono::steady_clock::now() - user.second).count() > AUTO_OFFLINE_SECONDS) {
             // Aquí se podría establecer el estado a INACTIVO
         }
     }
@@ -109,6 +112,30 @@ void send_direct_message(const std::string& recipient, const chat::IncomingMessa
 
 void handle_client(int client_sock); // Predeclaración de handle_client
 
+int find_recipient_socket(const std::string &recipient)
+{
+  int recipient_sock = -1;
+  for (auto &session : client_sessions)
+  {
+    if (session.second == recipient)
+    {
+      recipient_sock = session.first;
+      break;
+    }
+  }
+  return recipient_sock;
+}
+
+
+chat::IncomingMessageResponse prepare_message_response(const chat::Request &request, int client_sock)
+{
+  auto message = request.send_message();
+  chat::IncomingMessageResponse message_response;
+  std::lock_guard<std::mutex> lock(clients_mutex); // Lock the clients mutex, for thread safety
+  message_response.set_sender(client_sessions[client_sock]);
+  message_response.set_content(message.content());
+  return message_response;
+}
 
 void handle_send_message(const chat::Request &request, int client_sock, chat::Operation operation)
 {
