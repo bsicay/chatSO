@@ -11,7 +11,7 @@
 #include <netinet/in.h>              // For htonl, ntohl
 #include <google/protobuf/message.h> // For Google Protobuf
 
-bool SPM(int sock, const google::protobuf::Message &message); // SPM: Send Protobuf Message
-bool RPM(int sock, google::protobuf::Message &message);       // RPM: Receive Protobuf Message
+bool send_response(int sock, const google::protobuf::Message &message); // SPM: Send Protobuf Message
+bool receive_request(int sock, google::protobuf::Message &message);       // RPM: Receive Protobuf Message
 
 #endif // MESSAGE_H
