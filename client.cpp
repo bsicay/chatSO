@@ -17,8 +17,7 @@
 
 #define RED "\x1b[31m"
 #define GREEN "\x1b[32m"
-#define YELLOW "\x1b[33m"
-#define BLUE "\x1b[34m"
+#define LIGHT_GREEN "\x1b[92m"
 #define MAGENTA "\x1b[35m"
 #define CYAN "\x1b[36m"
 #define RESET "\x1b[0m"
@@ -27,7 +26,7 @@ std::atomic<bool> running{true};
 std::atomic<bool> in_input_mode{false};
 std::atomic<bool> waiting_response{false};
 std::atomic<bool> terminate_execution{false};
-std::atomic<bool> streaming_mode{false};
+std::atomic<bool> streaming_mode{true};
 std::mutex cout_mutex;
 std::deque<std::string> message_buffer; // Buffer for messages received during input mode
 
@@ -85,7 +84,7 @@ void messageListener(int sock)
           {
             const auto &msg = response.incoming_message();
             std::string type = (msg.type() == chat::MessageType::BROADCAST) ? "Broadcast" : "Direct";
-            message = BLUE + type + " message from " + msg.sender() + ": " + msg.content() + RESET;
+            message = LIGHT_GREEN + type + " message from " + msg.sender() + ": " + msg.content() + RESET;
           }
           break;
         case chat::Operation::GET_USERS:
@@ -160,7 +159,7 @@ void messageListener(int sock)
 
 void displayHelp()
 {
-  std::cout << GREEN;
+  std::cout << MAGENTA;
   std::cout << "\nCommands list:\n";
   std::cout << "    send <message>\n";
   std::cout << "    sendto <recipient> <message>\n";
