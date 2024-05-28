@@ -6,7 +6,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include "./utils/chat.pb.h"
+#include "./messageUtil/chat.pb.h"
 
 void receiveMessages(int sock) {
     char buffer[1024];
