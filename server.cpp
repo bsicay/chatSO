@@ -60,12 +60,18 @@ void update_status(const chat::Request &request, int client_sock, chat::Operatio
   send_response(client_sock, response);
 }
 
-void signalHandler(int signum) {
-    running = 0; // Establecer running a 0 cerrará el bucle principal
-    close(server_fd); // Cierra el socket del servidor
-    std::cout << "Server shutting down..." << std::endl;
-}
 
+void signalHandler(int signum)
+{
+  std::cout << "\nInterrupt signal (" << signum << ") received.\n";
+
+  // Close the server socket
+  close(server_fd);
+  running = false;
+
+  std::cout << "Server terminated due to signal." << std::endl;
+  exit(signum);
+}
 void send_message_to_client(int client_sock, const chat::IncomingMessageResponse& message_response, chat::MessageType type) {
     chat::Response response;
     response.set_operation(chat::INCOMING_MESSAGE);
