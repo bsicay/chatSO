@@ -240,6 +240,64 @@ bool handle_registration(const chat::Request &request, int client_sock) {
     return true;
 }
 
+void add_user_to_response(const std::pair<std::string, std::string> &user, chat::UserListResponse &response)
+{
+  chat::User *user_proto = response.add_users();
+  // Username concatenated string: <username> (<ip>)
+  user_proto->set_username(user.first + " (" + user.second + ")");
+  user_proto->set_status(user_status[user.first]);
+}
+
+/**
+ * GET_USERS 
+ */
+void handle_get_users(const chat::Request &request, int client_sock, chat::Operation operation)
+{
+  std::lock_guard<std::mutex> lock(clients_mutex);
+
+  chat::Response response;
+  response.set_operation(operation);
+
+  chat::UserListResponse user_list_response;
+
+  if (request.get_users().username().empty())
+  {
+    // Return all connected users
+    user_list_response.set_type(chat::UserListType::ALL);
+    for (const auto &user : user_details)
+    {
+      add_user_to_response(user, user_list_response);
+    }
+    std::cout << "All users returned successfully." << std::endl;
+    response.set_message("All users returned successfully.");
+    response.set_status_code(chat::StatusCode::OK);
+  }
+  else
+  {
+    user_list_response.set_type(chat::UserListType::SINGLE);
+    // Return only the specified user
+    auto it = user_details.find(request.get_users().username());
+    if (it != user_details.end())
+    {
+      add_user_to_response(*it, user_list_response);
+      std::cout << "User returned successfully: " << it->first << std::endl;
+      response.set_message("User returned successfully.");
+      response.set_status_code(chat::StatusCode::OK);
+    }
+    else
+    {
+      std::cout << "User not found: " << request.get_users().username() << std::endl;
+      response.set_message("User not found.");
+      response.set_status_code(chat::StatusCode::BAD_REQUEST);
+    }
+  }
+
+  // Copy the user list to the response
+  response.mutable_user_list()->CopyFrom(user_list_response);
+  // Send the complete response
+  send_response(client_sock, response);
+}
+
 /**
  * Función para manejar la conexión de un cliente
  */
@@ -263,7 +321,17 @@ void handle_client(int client_sock) {
             case chat::Operation::UPDATE_STATUS:
                  update_status(request, client_sock, chat::Operation::UPDATE_STATUS);
                 break;
+            case chat::Operation::GET_USERS:
+                 handle_get_users(request, client_sock, chat::Operation::GET_USERS);
+                 break;
+            case chat::Operation::UNREGISTER_USER:
+                unregister_user(client_sock);
+                 break;
             default:
+                chat::Response response;
+                response.set_message("request type DESCONOCIDO.");
+                response.set_status_code(chat::StatusCode::BAD_REQUEST);
+                send_response(client_sock, response);
                 break;
         }
     }
