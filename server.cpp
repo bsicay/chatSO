@@ -52,6 +52,11 @@ bool handle_registration(const chat::Request &request, int client_sock) {
 
     std::cout << "Attempting to register username: " << username << std::endl;
 
+    // Log current user details
+    std::cout << "Current registered users:\n";
+    for (const auto& user : user_details) {
+        std::cout << "Username: " << user.first << ", IP: " << user.second << std::endl;
+    }
     chat::Response response;
     response.set_operation(chat::Operation::REGISTER_USER);
 
