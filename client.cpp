@@ -235,8 +235,6 @@ void handleGetUserInfo(int sock, const std::string &username)
   request.set_operation(chat::Operation::GET_USERS);
   auto *user_list = request.mutable_get_users();
   user_list->set_username(username);
-  status_request->set_username(username);
-
 
   send_response(sock, request);
 }
