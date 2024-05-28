@@ -50,22 +50,18 @@ bool handle_registration(const chat::Request &request, int client_sock) {
 
     std::lock_guard<std::mutex> lock(clients_mutex);
 
-    // Log current user details
-    std::cout << "Current registered users:\n";
-    for (const auto& user : user_details) {
-        std::cout << "Username: " << user.first << ", IP: " << user.second << std::endl;
-    }
+    std::cout << "Attempting to register username: " << username << std::endl;
 
     chat::Response response;
     response.set_operation(chat::Operation::REGISTER_USER);
 
-    // Obtener la dirección IP del cliente
     struct sockaddr_in addr;
     socklen_t addr_size = sizeof(struct sockaddr_in);
     int res = getpeername(client_sock, (struct sockaddr *)&addr, &addr_size);
     std::string ip_str;
     if (res != -1) {
         ip_str = inet_ntoa(addr.sin_addr);
+        std::cout << "IP Address Retrieved: " << ip_str << std::endl;
     } else {
         response.set_message("Unable to retrieve IP address.");
         response.set_status_code(chat::StatusCode::BAD_REQUEST);
@@ -74,21 +70,24 @@ bool handle_registration(const chat::Request &request, int client_sock) {
     }
 
     if (user_details.find(username) != user_details.end()) {
+        std::cout << "Username already taken." << std::endl;
         response.set_message("Username is already taken.");
         response.set_status_code(chat::StatusCode::BAD_REQUEST);
         send_response(client_sock, response);
         return false;
     }
 
-    // Registrar al usuario
     user_details[username] = ip_str;
     client_sessions[client_sock] = username;
+
+    std::cout << "User registered successfully: " << username << std::endl;
 
     response.set_message("User registered successfully.");
     response.set_status_code(chat::StatusCode::OK);
     send_response(client_sock, response);
     return true;
 }
+
 /**
  * Función para manejar la conexión de un cliente
  */
