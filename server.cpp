@@ -225,7 +225,7 @@ bool handle_registration(const chat::Request &request, int client_sock) {
  * Función para manejar la conexión de un cliente
  */
 void handle_client(int client_sock) {
-    bool running = true;
+    bool running = true; 
     while (running) {
         chat::Request request;
         if (!receive_request(client_sock, request)) { // Función para recibir una solicitud
