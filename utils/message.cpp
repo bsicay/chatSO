@@ -6,7 +6,7 @@
 #include <unistd.h> // For ssize_t
 #include <cerrno>   // For errno
 
-bool SPM(int sock, const google::protobuf::Message &message)
+bool send_response(int sock, const google::protobuf::Message &message)
 {
   std::string output;
   message.SerializeToString(&output);
@@ -37,7 +37,7 @@ bool SPM(int sock, const google::protobuf::Message &message)
   return true;
 }
 
-bool RPM(int sock, google::protobuf::Message &message)
+bool receive_request(int sock, google::protobuf::Message &message)
 {
   std::vector<char> buffer(BUFFER_SIZE);
 
