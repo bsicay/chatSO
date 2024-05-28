@@ -71,6 +71,7 @@ bool handle_registration(const chat::Request &request, int client_sock) {
     }
 
     // Verificar si el nombre de usuario ya está registrado con cualquier dirección IP
+    std::cout << server_name << " user " << user_details.end() << std::endl;
     if (user_details.find(username) != user_details.end()) {
         response.set_message("Username is already taken.");
         response.set_status_code(chat::StatusCode::BAD_REQUEST);
