@@ -35,11 +35,46 @@ std::map<std::string, std::chrono::steady_clock::time_point> last_active;
 std::mutex activity_mutex;
 
 
+void update_user_status_and_time(int client_sock, const chat::UpdateStatusRequest &status_request)
+{
+  std::lock_guard<std::mutex> lock(clients_mutex);
+  user_status[client_sessions[client_sock]] = status_request.new_status();
+  // last_active[client_sessions[client_sock]] = std::chrono::system_clock::now(); TODO: Move this to any action retrieved on the general handling
+}
+
+/**
+ * UPDATE_STATUS main function
+ */
+void update_status(const chat::Request &request, int client_sock, chat::Operation operation)
+{
+  auto status_request = request.update_status();
+  update_user_status_and_time(client_sock, status_request);
+
+  chat::Response response;
+  response.set_operation(operation);
+  response.set_message("Status updated successfully."); // Consider replacing this with a constant or a configuration value
+  response.set_status_code(chat::StatusCode::OK);
+  send_response(client_sock, response);
+}
+
 void signalHandler(int signum) {
     running = 0; // Establecer running a 0 cerrará el bucle principal
     close(server_fd); // Cierra el socket del servidor
     std::cout << "Server shutting down..." << std::endl;
 }
+
+void send_message_to_client(int client_sock, const chat::IncomingMessageResponse& message_response, chat::MessageType type) {
+    chat::Response response;
+    response.set_operation(chat::INCOMING_MESSAGE);
+    response.set_status_code(chat::StatusCode::OK);
+    auto* incoming_message = response.mutable_incoming_message();
+    incoming_message->CopyFrom(message_response);
+    incoming_message->set_type(type);
+    std::string response_str;
+    response.SerializeToString(&response_str);
+    send(client_sock, response_str.c_str(), response_str.size(), 0);
+}
+
 
 // Función para actualizar la inactividad de los usuarios
 void update_inactivity() {
@@ -73,18 +108,6 @@ void send_direct_message(const std::string& recipient, const chat::IncomingMessa
 
 
 void handle_client(int client_sock); // Predeclaración de handle_client
-
-void send_message_to_client(int client_sock, const chat::IncomingMessageResponse& message_response, chat::MessageType type) {
-    chat::Response response;
-    response.set_operation(chat::INCOMING_MESSAGE);
-    response.set_status_code(chat::StatusCode::OK);
-    auto* incoming_message = response.mutable_incoming_message();
-    incoming_message->CopyFrom(message_response);
-    incoming_message->set_type(type);
-    std::string response_str;
-    response.SerializeToString(&response_str);
-    send(client_sock, response_str.c_str(), response_str.size(), 0);
-}
 
 
 void handle_send_message(const chat::Request &request, int client_sock, chat::Operation operation)
