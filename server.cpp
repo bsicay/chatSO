@@ -1,200 +1,467 @@
-#include "./utils/chat.pb.h" // Include the generated protobuf header
-#include "./utils/message.h"
-#include "./utils/constants.h"
-#include <iostream>
-#include <string>
-#include <map>
-#include <mutex>
-#include <vector>
-#include <sys/socket.h>
+/*
+*   Autores:
+*   Descripción:
+*           Programa que funge como servidor para el manejo de conexiones por medio de sockets
+*           de forma que se puedan manejar mensajes entre usuarios y otras funcionalidades.
+*/
+
+
 #include <netinet/in.h>
-#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
-#include <thread>
+#include <string.h>
+#include <list>
+#include <fcntl.h>
 #include <chrono>
-#include <errno.h> // For errno, EPIPE
-#include <cstring> // For strerror
+#include <arpa/inet.h>
 
-std::mutex clients_mutex;
-std::map<int, std::string> client_sessions;  // Maps client socket to username
-std::map<std::string, User> user_details;    // Maps username to user struct
-std::atomic<bool> running(true);
-int server_fd;
+#define PORT 8080
+#define CLIENT_BUFFER_SIZE 3072
 
-void handle_registration(const chat::Request& request, int client_sock) {
-    auto& reg_request = request.register_user();
-    std::string username = reg_request.username();
-    std::lock_guard<std::mutex> lock(clients_mutex);
+//ProtoBuff
+#include "chat.pb.h"
 
-    // Obtener IP del cliente
-    struct sockaddr_in addr;
-    socklen_t addr_len = sizeof(addr);
-    getpeername(client_sock, (struct sockaddr*)&addr, &addr_len);
-    std::string client_ip = inet_ntoa(addr.sin_addr);
+using namespace std;
+using namespace chat;
+using namespace std::chrono;
 
-    if (user_details.find(username) != user_details.end()) {
-        send_error_response(client_sock, "Username is already taken", chat::StatusCode::BAD_REQUEST);
-        return;
-    }
+pthread_mutex_t mutexP;
 
-    User user{username, client_ip, chat::UserStatus::ONLINE, std::chrono::system_clock::now()};
-    user_details[username] = user;
-    client_sessions[client_sock] = username;
-
-    send_success_response(client_sock, "User registered successfully", chat::Operation::REGISTER_USER);
-}
-
-void handle_send_message(const chat::Request& request, int client_sock) {
-    const auto& msg_request = request.send_message();
-    std::string recipient = msg_request.recipient();
-    std::string message_content = msg_request.content();
-
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    if (recipient.empty()) {  // Broadcast message
-        for (const auto& session : client_sessions) {
-            if (session.first != client_sock) {
-                send_message_to_client(session.first, message_content);
-            }
-        }
-    } else {  // Direct message
-        int recipient_sock = -1;
-        for (const auto& session : client_sessions) {
-            if (user_details[session.second].username == recipient) {
-                recipient_sock = session.first;
-                break;
-            }
-        }
-        if (recipient_sock != -1) {
-            send_message_to_client(recipient_sock, message_content);
-        } else {
-            send_error_response(client_sock, "Recipient not found", chat::StatusCode::BAD_REQUEST);
-        }
-    }
-}
-
-void update_status(const chat::Request& request, int client_sock) {
-    const auto& status_request = request.update_status();
-    std::string username = client_sessions[client_sock];
-    chat::UserStatus new_status = status_request.new_status();
-
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    if (user_details.find(username) != user_details.end()) {
-        user_details[username].status = new_status;
-        send_success_response(client_sock, "Status updated successfully", chat::Operation::UPDATE_STATUS);
-    } else {
-        send_error_response(client_sock, "User not found", chat::StatusCode::BAD_REQUEST);
-    }
-}
-
-void handle_get_users(const chat::Request& request, int client_sock) {
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    chat::UserListResponse user_list;
-
-    for (const auto& user_pair : user_details) {
-        chat::User* user_proto = user_list.add_users();
-        user_proto->set_username(user_pair.second.username);
-        user_proto->set_status(user_pair.second.status);
-    }
-
-    send_user_list_response(client_sock, user_list, "User list fetched successfully");
-}
-
-void send_success_response(int client_sock, const std::string& message, chat::Operation operation) {
-    chat::Response response;
-    response.set_message(message);
-    response.set_status_code(chat::StatusCode::OK);
-    response.set_operation(operation);
-    std::string serialized_response = response.SerializeAsString();
-    send(client_sock, serialized_response.data(), serialized_response.size(), 0);
-}
-
-void send_error_response(int client_sock, const std::string& error_message, chat::StatusCode status) {
-    chat::Response response;
-    response.set_message(error_message);
-    response.set_status_code(status);
-    std::string serialized_response = response.SerializeAsString();
-    send(client_sock, serialized_response.data(), serialized_response.size(), 0);
-}
-
-void send_user_list_response(int client_sock, const chat::UserListResponse& user_list, const std::string& message) {
-    chat::Response response;
-    response.set_message(message);
-    response.set_status_code(chat::StatusCode::OK);
-    response.mutable_user_list()->CopyFrom(user_list);
-    std::string serialized_response = response.SerializeAsString();
-    send(client_sock, serialized_response.data(), serialized_response.size(), 0);
-}
-
-void send_message_to_client(int client_sock, const std::string& message) {
-    chat::Response response;
-    response.set_message(message);
-    response.set_status_code(chat::StatusCode::OK);
-    std::string serialized_response = response.SerializeAsString();
-    send(client_sock, serialized_response.data(), serialized_response.size(), 0);
-}
-
-
+// Estrucutra para almacenar la información de los usuarios conectados
 struct User {
-    std::string username;
-    std::string ip;
-    chat::UserStatus status;
-    std::chrono::system_clock::time_point last_active;
+    string username;
+    string ip;
+    int socketFD;
+    int status;
 };
 
-void handle_client(int client_sock) {
-    while (running) {
-        chat::Request request;
-        if (RPM(client_sock, request) == false) {
-            std::cerr << "Failed to read message from client. Closing connection." << std::endl;
-            // Handle closing
-            break;
-        }
+// Estrucutra para almacenar informacion del socket
+struct threadInfo {
+    int socketFD;
+};
 
-        std::lock_guard<std::mutex> lock(clients_mutex);
-        auto &user = user_details[client_sessions[client_sock]];
+// Estructura para almacenar el estado del usuario
+struct ActivityInfo {
+    int socketFD;
+    steady_clock::time_point* start_time;
+    bool* isActive;
+};
+ 
+// Listado de usuarios
+list<User> connectedUsers;
 
-        // Update user activity time
-        user.last_active = std::chrono::system_clock::now();
-
-        switch (request.operation()) {
-        case chat::Operation::REGISTER_USER:
-            handle_registration(request, client_sock);
-            break;
-        case chat::Operation::SEND_MESSAGE:
-            handle_send_message(request, client_sock);
-            break;
-        case chat::Operation::UPDATE_STATUS:
-            update_status(request, client_sock);
-            break;
-        case chat::Operation::GET_USERS:
-            handle_get_users(request, client_sock);
-            break;
-        case chat::Operation::UNREGISTER_USER:
-            unregister_user(client_sock);
-            break;
-        default:
-            std::cerr << "Unknown request type." << std::endl;
-            break;
+//Verificar si un usuario esta conectado
+int isUserConnected(const string& username, const string& ip) {
+    for (const User& user : connectedUsers) {
+        if (user.username == username && user.ip == ip) {
+            return 1;
         }
     }
-}
-
-int main(int argc, char *argv[]) {
-    setup_server(argc, argv); // Setup listening socket, bind, etc.
-    std::cout << "Server listening on port " << std::stoi(argv[1]) << std::endl;
-
-    while (running) {
-        int client_sock = accept(server_fd, NULL, NULL);
-        if (client_sock < 0) {
-            perror("Accept failed");
-            continue;
-        }
-        std::thread client_thread(handle_client, client_sock);
-        client_thread.detach();
-    }
-    // Cleanup
-    close(server_fd);
     return 0;
 }
 
 
+// Elimimnar a un usuario de la lista de usuarios conectados
+
+int deleteUser(const string& username, const string& ip) {
+    auto it = find_if(connectedUsers.begin(), connectedUsers.end(), [&](const User& user) {
+        return user.username == username && user.ip == ip;
+    });
+    if (it != connectedUsers.end()) {
+        connectedUsers.erase(it);
+        cout << "User " << username << " " << ip << " disconnected." << endl;
+    }
+    return 0;
+}
+
+// Función para el manejo de mensajes generales
+void generalMessage(const newMessage& userMessage) {
+    ServerResponse serverResponse;
+    serverResponse.mutable_message()->CopyFrom(userMessage);
+    serverResponse.set_option(4);
+    serverResponse.set_code(200);
+    serverResponse.set_servermessage("Mensaje enviado");
+    string response = serverResponse.SerializeAsString();
+
+    for (const User& user : connectedUsers) {
+        if (user.status != 2) {
+            send(user.socketFD, response.c_str(), response.size(), 0);
+        }
+    }
+}
+
+
+// Funcion para el manejo de mensajes directos
+
+bool directMessage(const newMessage& userMessage) {
+    ServerResponse serverResponse;
+    serverResponse.mutable_message()->CopyFrom(userMessage);
+    serverResponse.set_option(4);
+    serverResponse.set_code(200);
+    serverResponse.set_servermessage("Mensaje enviado");
+    string response = serverResponse.SerializeAsString();
+    bool userFound = false;
+
+    for (User& user : connectedUsers) {
+        if (user.username == userMessage.recipient() && user.status != 2) {
+            cout << "mensaje enviado a " << user.username << endl;
+            userFound = true;
+            send(user.socketFD, response.c_str(), response.size(), 0);
+        }
+    }
+
+    return userFound;
+}
+// Funcion para el manejo de mensajes de estado por inactividad
+void on_timeout(int fd) {
+    for (auto& user : connectedUsers) {
+        if (user.socketFD == fd) {
+            cout << "Status change to inactive for user: " << user.username << endl;
+            user.status = 3;
+        }
+    }
+}
+
+// Funcion para controlar el tiempo de inactividad de los usuarios
+void* checkActivity (void* arg) {
+    struct ActivityInfo* info = (struct ActivityInfo*)arg;
+    duration<int> time_limit = seconds(30);
+
+    while (true) {
+        steady_clock::time_point current_time = steady_clock::now();
+        duration<int> elapsed_time = duration_cast<seconds>(current_time - *info->start_time);
+
+        // Comprueba si se ha alcanzado el límite de tiempo
+        if (elapsed_time >= time_limit && (*info->isActive)) {
+            on_timeout(info->socketFD);
+            // Reinicia el temporizador estableciendo un nuevo tiempo de referencia
+            *info->start_time = steady_clock::now();
+            *info->isActive = false;
+        }
+    }
+}
+
+
+// Funcion para reactivar usuarios inactivos
+void activeUser(int fd, bool* isActive) {
+    if (!(*isActive)) {
+        for (auto& user : connectedUsers) {
+            if (user.socketFD == fd) {
+                cout << "Status change to active for user: " << user.username << endl;
+                user.status = 1;
+            }
+        }
+        *isActive = true;
+    }
+}
+
+// Funcion para el manejo de las peticiones de los clientes
+void* connectionHandler(void* arg) {
+    
+    struct threadInfo* data = (struct threadInfo*)arg;
+
+    // Se obtiene el socket_fd de la estructura
+    int new_socket = data->socketFD;
+
+    int valread;
+    char buffer[CLIENT_BUFFER_SIZE] = {0};
+    const char* hello = "Hello from server";
+    UserRequest userRequest;
+
+    // User Request
+    newMessage userMessage;
+    UserRegister userRegister;
+    UserInfoRequest userInfoRequest;
+    ChangeStatus changeStatus;
+
+    // Server Response
+    ServerResponse serverResponse;
+
+    User user;
+
+    AllConnectedUsers allConnectedUsers;
+
+    UserInfo userInfo;
+
+    pthread_t activityThread;
+
+    bool* isActive = new bool;
+    *isActive = true;
+
+    // Se crea un timer para que cada 30 segundos, si el usuario no ha hecho nada, se cambie su estado a inactivo.
+    steady_clock::time_point start_time = steady_clock::now();
+    steady_clock::time_point* ptr_start_time = &start_time;
+
+    struct ActivityInfo* info = new ActivityInfo;
+    info->socketFD = new_socket;
+    info->start_time = ptr_start_time;
+    info->isActive = isActive;
+
+    pthread_create(&activityThread, NULL, checkActivity, (void *) info);
+
+    bool notClosed = true;
+
+    // Mientras la conexión sea válida
+    while (notClosed)
+    {
+        cout << "Server: Waiting for request..." << endl;
+
+        valread = read(new_socket , buffer, CLIENT_BUFFER_SIZE - 1);
+        buffer[valread] = '\0';
+
+        if (valread <= 0) {
+            break;
+        }
+
+        // Validacion de la implementacion del proto
+        try {
+            string request = (string) buffer;
+            userRequest.ParseFromArray(buffer, CLIENT_BUFFER_SIZE);
+                
+            int option = userRequest.option();
+            cout << option << endl;
+
+            string response;
+            bool userFound = false;
+
+            if (option != 0 || option != 5) {
+                *ptr_start_time = steady_clock::now();
+                activeUser(new_socket, isActive);
+            }
+            
+            //manejo de opciones
+            switch (option)
+            {
+            case 1:// Registro de Usuarios
+                userRegister = userRequest.newuser();
+                cout << "El username es: " << userRegister.username() << endl;
+                cout << "El ip es: " << userRegister.ip() << endl;
+
+
+                if (isUserConnected(userRegister.username(), userRegister.ip()) == 0) {
+                    printf("Nuevo usuario registrado\n");
+                    serverResponse.set_option(1);
+                    serverResponse.set_code(200);
+                    serverResponse.set_servermessage("Usuario registrado");
+
+                    user.username = userRegister.username();
+                    user.ip =userRegister.ip();
+                    user.socketFD = new_socket;
+                    user.status = 1;
+                    pthread_mutex_lock(&mutexP);
+                    connectedUsers.push_back(user);
+                    pthread_mutex_unlock(&mutexP);
+
+                } else {
+                    printf("Usuario ya registrado\n");
+                    serverResponse.set_option(1);
+                    serverResponse.set_code(400);
+                    serverResponse.set_servermessage("Usuario ya existente");
+                }
+                
+                response = serverResponse.SerializeAsString();
+                
+                break;
+            
+            case 2:// Informacion de usuario
+                userInfoRequest = userRequest.inforequest(); 
+                cout << "El tipo de request es: " << userInfoRequest.type_request() << endl; 
+                cout << "El usuario es: " << userInfoRequest.user() << endl; 
+
+                AllConnectedUsers* allConnectedUsers;
+                if (userInfoRequest.type_request()) {
+                    allConnectedUsers = new AllConnectedUsers;
+                    printf("Informacion de todos los usuarios\n");
+                    serverResponse.set_option(2);
+                    serverResponse.set_code(200);
+                    serverResponse.set_servermessage("Informacion de todos los usuarios");
+                    for (User user : connectedUsers) {
+                        UserInfo userInfo;
+                        userInfo.set_username(user.username);
+                        userInfo.set_ip(user.ip);
+                        userInfo.set_status(user.status);
+                        allConnectedUsers->add_connectedusers()->CopyFrom(userInfo);
+                    }
+
+                    serverResponse.set_allocated_connectedusers(allConnectedUsers);
+
+
+                } else {
+                    printf("Informacion de un usuario\n");
+                    serverResponse.set_option(2);
+                    serverResponse.set_code(200);
+                    serverResponse.set_servermessage("Informacion de un usuario");
+                    serverResponse.clear_connectedusers();
+                    userFound = false;
+                    for (User user : connectedUsers) {
+                        if (user.username == userInfoRequest.user()) {
+                            userFound = true;
+                            //userInfo = new UserInfo;
+                            //UserInfo* userInfo = serverResponse.add_userinforesponse();
+                            userInfo.set_username(user.username);
+                            userInfo.set_ip(user.ip);
+                            userInfo.set_status(user.status);
+                            //allConnectedUsers->add_connectedusers()->CopyFrom(userInfo);r
+                            serverResponse.mutable_userinforesponse()->CopyFrom(userInfo);
+                        }
+                    }
+
+                    if (!userFound) {
+                            serverResponse.set_code(400);
+                            serverResponse.set_servermessage("Usuario no encontrado");
+                        }
+
+                }
+                response = serverResponse.SerializeAsString();
+                // delete allConnectedUsers;
+                
+                break;
+            case 3:// Cambio de status
+                changeStatus = userRequest.status();
+                cout << "El usuario es: " << changeStatus.username() << endl;
+                cout << "El nuevo status es: " << changeStatus.newstatus() << endl;
+
+                userFound = false;
+                for (auto& user : connectedUsers) {
+                    if (user.username == changeStatus.username()) {
+                        user.status = changeStatus.newstatus();
+                        userFound = true;
+                    }
+                }
+
+                if (userFound) {
+                    serverResponse.set_option(3);
+                    serverResponse.set_code(200);
+                    serverResponse.set_servermessage("Status cambiado");
+                } else {
+                    serverResponse.set_option(3);
+                    serverResponse.set_code(400);
+                    serverResponse.set_servermessage("Usuario no encontrado");
+                }   
+
+                response = serverResponse.SerializeAsString();
+                
+
+                break;
+            case 4://Nuevo mensaje
+                userMessage = userRequest.message();
+                bool responseMessage;
+                responseMessage = true;
+                if (userMessage.message_type()) {
+                    generalMessage(userMessage);
+                }
+                else {
+                    responseMessage = directMessage(userMessage);
+                }
+                if (responseMessage) {
+                    serverResponse.set_code(200);
+                    serverResponse.set_option(4);
+                    serverResponse.set_servermessage("Mensaje enviado correctamente.");
+                }
+                else {
+                    serverResponse.set_code(400);
+                    serverResponse.set_option(4);
+                    serverResponse.set_servermessage("Error: el mensaje no se pudo enviar.");
+                }
+
+                response = serverResponse.SerializeAsString();
+                break;
+            case 5://Heartbeat
+                printf("Hearbeat\n");
+                break;
+            default:
+                notClosed = false;
+                break;
+            }
+            send(new_socket , response.c_str() , response.size() , 0 );
+            printf("Hello message sent\n");
+        }
+        catch (const exception& e) {
+            serverResponse.set_option(1);
+            serverResponse.set_code(400);
+            serverResponse.set_servermessage("Error en request");
+            string response = serverResponse.SerializeAsString();
+            send(new_socket , response.c_str() , response.size() , 0 );
+            continue;
+        }
+
+        
+    }
+    // Cierra el socket
+    cout << "Closing user connection gracefully..." << endl;
+    deleteUser(user.username, user.ip);
+    close(new_socket);
+
+    pthread_cancel(activityThread);
+    pthread_join(activityThread, NULL);
+
+    pthread_exit(0);
+}
+
+int main(int argc, char** argv){
+    if (argc <= 1) {
+        cout << "Error ingrese el puerto." << endl;
+        return -1;
+    }
+    int port = stoi(argv[1]);
+    GOOGLE_PROTOBUF_VERIFY_VERSION;
+    int server_fd, new_socket, valread;
+    struct sockaddr_in address;
+    int opt = 1;
+    int addrlen = sizeof(address);
+
+    pthread_mutex_init(&mutexP, NULL);
+
+    // Creating socket file descriptor
+    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0){
+        perror("socket failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Forcefully attaching socket to the port 8080
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))){
+        perror("setsockopt");
+        exit(EXIT_FAILURE);
+    }
+
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons( port );
+
+    // Forcefully attaching socket to the port 8080
+    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address))<0){
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Se indica al socket que escuche por nuevas conexiones.
+    if (listen(server_fd, 3) < 0){
+        perror("listen");
+        exit(EXIT_FAILURE);
+    }
+
+    while (true) {
+        cout << "Waiting for new connections..." << endl;
+        // Se maneja una nueva conexión
+        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0){
+            perror("accept");
+            exit(EXIT_FAILURE);
+        }
+        else {
+            // Si la conexión es aceptada, se crea un nuevo thread que maneja la sesión del usuario.
+            pthread_t thread;
+
+            // Se envía el file descriptor de la conexión para poder identificar que usuario conectado se está comunicando.
+            struct threadInfo* data = new threadInfo;
+            data->socketFD = new_socket;
+            pthread_create(&thread, NULL, connectionHandler, (void *) data);
+        }
+    }
+    shutdown(server_fd, SHUT_RDWR);
+    pthread_mutex_destroy(&mutexP);
+    return 0;
+
+}
