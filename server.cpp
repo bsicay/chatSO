@@ -89,13 +89,27 @@ void update_inactivity() {
     }
 }
 
-void send_broadcast_message(const chat::IncomingMessageResponse& message_response, int sender_sock) {
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    for (const auto& session : client_sessions) {
-        if (session.first != sender_sock) { // No enviar el mensaje de vuelta al remitente
-            send_message_to_client(session.first, message_response, chat::MessageType::BROADCAST);
-        }
+void send_broadcast_message(const chat::IncomingMessageResponse &message_response, int client_sock)
+{
+  std::lock_guard<std::mutex> lock(clients_mutex);
+
+  for (const auto &session : client_sessions)
+  {
+    if (session.first != client_sock)
+    { 
+      chat::Response response_to_recipient;
+      response_to_recipient.set_operation(chat::Operation::INCOMING_MESSAGE);
+      response_to_recipient.set_message("Broadcast message incoming.");
+      response_to_recipient.set_status_code(chat::StatusCode::OK);
+      response_to_recipient.mutable_incoming_message()->CopyFrom(message_response);
+      receive_request(session.first, response_to_recipient);
     }
+  }
+
+  chat::Response response_to_sender;
+  response_to_sender.set_message("Broadcast message sent successfully.");
+  response_to_sender.set_status_code(chat::StatusCode::OK);
+  receive_request(client_sock, response_to_sender);
 }
 
 void send_direct_message(chat::Response &response_to_sender, chat::Response &response_to_recipient, chat::IncomingMessageResponse &message_response, int client_sock, int recipient_sock)
