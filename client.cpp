@@ -194,35 +194,31 @@ void handleDirectMessage(int sock, const std::string &recipient, const std::stri
 }
 
 
-bool handleChangeStatus(int sock, const std::string &status)
-{
-  chat::Request request;
-  request.set_operation(chat::Operation::UPDATE_STATUS);
-  auto *status_request = request.mutable_update_status();
-  status_request->set_username(username);
+bool handleChangeStatus(int sock, const std::string &username, const std::string &status) {
+    chat::Request request;
+    request.set_operation(chat::Operation::UPDATE_STATUS);
+    auto *status_request = request.mutable_update_status();
 
+    // Set the username for which the status is to be updated
+    status_request->set_username(username);
 
-  if (status == "ONLINE")
-  {
-    status_request->set_new_status(chat::UserStatus::ONLINE);
-  }
-  else if (status == "BUSY")
-  {
-    status_request->set_new_status(chat::UserStatus::BUSY);
-  }
-  else if (status == "OFFLINE")
-  {
-    status_request->set_new_status(chat::UserStatus::OFFLINE);
-  }
-  else
-  {
-    std::cout << "Invalid status: Valid ones are: ONLINE, BUSY & OFFLINE\n";
-    return false;
-  }
+    // Set the new status based on the input
+    if (status == "ONLINE") {
+        status_request->set_new_status(chat::UserStatus::ONLINE);
+    } else if (status == "BUSY") {
+        status_request->set_new_status(chat::UserStatus::BUSY);
+    } else if (status == "OFFLINE") {
+        status_request->set_new_status(chat::UserStatus::OFFLINE);
+    } else {
+        std::cout << "Invalid status: Valid ones are: ONLINE, BUSY & OFFLINE\n";
+        return false;
+    }
 
-  send_response(sock, request);
-  return true;
+    // Send the update status request to the server
+    send_response(sock, request);
+    return true;
 }
+
 
 void handleListUsers(int sock)
 {
@@ -377,26 +373,18 @@ int main(int argc, char *argv[])
         handleDirectMessage(sock, recipient, message);
       }
     }
-    else if (words[0] == "status")
-    {
-      if (length != 2)
-      {
+    else if (words[0] == "status") {
+    if (length != 2) {
         std::cout << "Invalid command. Usage: status <status>\n";
-        waiting_response = false;
-      }
-      else
-      {
-        const bool accepted_status = handleChangeStatus(sock, words[1]);
-        if (accepted_status)
-        {
-          waiting_response = true;
+    } else {
+        if (handleChangeStatus(sock, username, words[1])) {
+            std::cout << "Status change requested for " << username << " to " << words[1] << std::endl;
+        } else {
+            std::cout << "Failed to change status for " << username << std::endl;
         }
-        else
-        {
-          waiting_response = false;
-        }
-      }
     }
+}
+
     else if (words[0] == "userList")
     {
       if (length != 1)
