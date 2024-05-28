@@ -232,17 +232,16 @@ void handle_client(int client_sock) {
             std::cerr << "Failed to read message from client. Closing connection." << std::endl;
             break;
         }
-
         switch (request.operation()) {
             case chat::Operation::REGISTER_USER:
                 if (!handle_registration(request, client_sock)) {
                     std::cerr << "Registration failed for client." << std::endl;
                 }
                 break;
-            case chat::SEND_MESSAGE:
+            case chat::Operation::SEND_MESSAGE:
                  handle_send_message(request, client_sock, chat::Operation::SEND_MESSAGE);
                 break;
-            case chat::UPDATE_STATUS:
+            case chat::Operation::STATUS:
                  update_status(request, client_sock, chat::Operation::UPDATE_STATUS);
                 break;
             default:
