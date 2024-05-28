@@ -31,6 +31,9 @@ int server_fd; // Descriptor del socket del servidor
 std::map<int, std::string> client_sessions; // Mapa de descriptores de socket a nombres de usuario
 std::map<std::string, std::string> user_details; // Mapa de nombres de usuario a direcciones IP
 std::mutex clients_mutex;  // Mutex para controlar el acceso a las estructuras de datos compartidas
+std::map<std::string, std::chrono::steady_clock::time_point> last_active;
+std::mutex activity_mutex;
+
 
 void signalHandler(int signum) {
     running = 0; // Establecer running a 0 cerrará el bucle principal
@@ -38,7 +41,51 @@ void signalHandler(int signum) {
     std::cout << "Server shutting down..." << std::endl;
 }
 
+// Función para actualizar la inactividad de los usuarios
+void update_inactivity() {
+    std::lock_guard<std::mutex> lock(activity_mutex);
+    for (auto& user : last_active) {
+        if (std::chrono::duration_cast<std::chrono::minutes>(std::chrono::steady_clock::now() - user.second).count() > INACTIVITY_LIMIT) {
+            // Aquí se podría establecer el estado a INACTIVO
+        }
+    }
+}
+
 void handle_client(int client_sock); // Predeclaración de handle_client
+
+
+void send_broadcast_message(const chat::IncomingMessageResponse& message_response, int sender_sock) {
+    std::lock_guard<std::mutex> lock(clients_mutex);
+    for (const auto& session : client_sessions) {
+        if (session.first != sender_sock) { // No enviar el mensaje de vuelta al remitente
+            send_message_to_client(session.first, message_response, chat::MessageType::BROADCAST);
+        }
+    }
+}
+
+void send_direct_message(const std::string& recipient, const chat::IncomingMessageResponse& message_response, int sender_sock) {
+    std::lock_guard<std::mutex> lock(clients_mutex);
+    auto it = std::find_if(client_sessions.begin(), client_sessions.end(),
+                           [&](const auto& pair) { return pair.second == recipient; });
+    if (it != client_sessions.end()) {
+        send_message_to_client(it->first, message_response, chat::MessageType::DIRECT);
+    } else {
+        // Enviar respuesta de error al remitente si el destinatario no existe
+    }
+}
+
+void send_message_to_client(int client_sock, const chat::IncomingMessageResponse& message_response, chat::MessageType type) {
+    chat::Response response;
+    response.set_operation(chat::INCOMING_MESSAGE);
+    response.set_status_code(chat::StatusCode::OK);
+    auto* incoming_message = response.mutable_incoming_message();
+    incoming_message->CopyFrom(message_response);
+    incoming_message->set_type(type);
+    std::string response_str;
+    response.SerializeToString(&response_str);
+    send(client_sock, response_str.c_str(), response_str.size(), 0);
+}
+
 
 
 /**
@@ -111,7 +158,12 @@ void handle_client(int client_sock) {
                     std::cerr << "Registration failed for client." << std::endl;
                 }
                 break;
-            // Agregar otros casos para diferentes operaciones
+            case chat::SEND_MESSAGE:
+                handle_send_message(request.send_message(), client_sock);
+                break;
+            case chat::UPDATE_STATUS:
+                update_status(request.update_status(), client_sock);
+                break;
             default:
                 break;
         }
