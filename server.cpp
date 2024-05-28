@@ -239,35 +239,28 @@ bool handle_registration(const chat::Request &request, int client_sock) {
  */
 void handle_client(int client_sock) {
     bool running = true; 
-    std::cout << "Handling new client: Socket " << client_sock << std::endl;
     while (running) {
         chat::Request request;
         if (!receive_request(client_sock, request)) { // Función para recibir una solicitud
-            std::cerr << "Failed to read message from client on socket " << client_sock << ". Closing connection." << std::endl;
+            std::cerr << "Failed to read message from client. Closing connection." << std::endl;
             break;
         }
-
-        std::cout << "Received request type " << request.operation() << " from socket " << client_sock << std::endl;
-
         switch (request.operation()) {
             case chat::Operation::REGISTER_USER:
                 if (!handle_registration(request, client_sock)) {
-                    std::cerr << "Registration failed for client on socket " << client_sock << std::endl;
+                    std::cerr << "Registration failed for client." << std::endl;
                 }
                 break;
             case chat::Operation::SEND_MESSAGE:
-                handle_send_message(request, client_sock, chat::Operation::SEND_MESSAGE);
+                 handle_send_message(request, client_sock, chat::Operation::SEND_MESSAGE);
                 break;
             case chat::Operation::UPDATE_STATUS:
-                update_status(request, client_sock, chat::Operation::UPDATE_STATUS);
+                 update_status(request, client_sock, chat::Operation::UPDATE_STATUS);
                 break;
             default:
-                std::cerr << "Unknown operation received from socket " << client_sock << std::endl;
                 break;
         }
     }
-}
-
 
     // Cerrar la conexión y limpiar los datos de sesión
     close(client_sock);
