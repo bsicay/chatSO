@@ -15,8 +15,8 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include "chat.pb.h" 
-#include "message.h"
+#include "./utils/chat.pb.h" // Include the generated protobuf header
+#include "./utils/message.h"
 #include <iostream> // For std::cerr
 #include <vector>   // For std::vector
 #include <cstring>  // For memcpy
