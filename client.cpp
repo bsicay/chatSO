@@ -167,6 +167,7 @@ void displayHelp()
   std::cout << "    userList\n";
   std::cout << "    info <username>\n";
   std::cout << "    liveChat\n";
+   std::cout << "    help\n";
   std::cout << "    exit\n\n";
   std::cout << RESET;
 }

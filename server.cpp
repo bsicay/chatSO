@@ -298,6 +298,42 @@ void handle_get_users(const chat::Request &request, int client_sock, chat::Opera
   send_response(client_sock, response);
 }
 
+void unregister_user(int client_sock, bool forced = false)
+{
+  std::lock_guard<std::mutex> lock(clients_mutex);
+  chat::Response response;
+
+  if (client_sessions.find(client_sock) != client_sessions.end())
+  {
+    std::string username = client_sessions[client_sock];
+
+    // Erase user data from maps
+    client_sessions.erase(client_sock);
+
+    user_details.erase(username);
+
+    user_status.erase(username);
+
+    last_active.erase(username);
+
+    // Prepare a response message
+    response.set_operation(chat::Operation::UNREGISTER_USER);
+    response.set_message("User unregistered successfully.");
+    response.set_status_code(chat::StatusCode::OK);
+  }
+  else
+  {
+    // User not found or already unregistered, send error response
+    response.set_message("User not found or already unregistered.");
+    response.set_status_code(chat::StatusCode::BAD_REQUEST);
+  }
+
+  if (!forced)
+  {
+    send_response(client_sock, response);
+  }
+}
+
 /**
  * Función para manejar la conexión de un cliente
  */
