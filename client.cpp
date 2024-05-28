@@ -1,12 +1,14 @@
 #include <iostream>
 #include <string>
+#include <sstream>
+#include <vector>
 #include <thread>
 #include <mutex>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include "./messageUtil/chat.pb.h"
+#include "chat.pb.h"  // Asegúrate que la ruta del include es correcta
 
 void receiveMessages(int sock) {
     char buffer[1024];
@@ -16,7 +18,6 @@ void receiveMessages(int sock) {
             std::cerr << "Disconnected or error receiving data." << std::endl;
             break;
         }
-        // Deserializar y procesar el mensaje
         chat::Response response;
         response.ParseFromArray(buffer, bytes_received);
         std::cout << "Received: " << response.message() << std::endl;
@@ -74,13 +75,12 @@ void handle_commands(int sock) {
     }
 }
 
-
 int main(int argc, char *argv[]) {
     if (argc != 4) {
         std::cerr << "Usage: " << argv[0] << " <username> <IP server> <port>\n";
         return 1;
     }
-    
+
     std::string username = argv[1];
     std::string server_ip = argv[2];
     int port = std::stoi(argv[3]);
@@ -115,18 +115,8 @@ int main(int argc, char *argv[]) {
     std::thread receiverThread(receiveMessages, sock);
     receiverThread.detach();
 
-    // // Interfaz de usuario
-    // std::string input;
-    // while (true) {
-    //     std::getline(std::cin, input);
-    //     if (input == "exit") {
-    //         break;
-    //     }
-    //     // Envío de mensajes, cambio de estado, etc.
-    // }
+    // Ejecuta el manejo de comandos en el thread principal
     handle_commands(sock);
-
-
 
     close(sock);
     return 0;
