@@ -241,7 +241,7 @@ void handle_client(int client_sock) {
             case chat::Operation::SEND_MESSAGE:
                  handle_send_message(request, client_sock, chat::Operation::SEND_MESSAGE);
                 break;
-            case chat::Operation::STATUS:
+            case chat::Operation::UPDATE_STATUS:
                  update_status(request, client_sock, chat::Operation::UPDATE_STATUS);
                 break;
             default:
