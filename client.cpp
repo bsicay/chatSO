@@ -160,13 +160,13 @@ void messageListener(int sock)
 void displayHelp()
 {
   std::cout << MAGENTA;
-  std::cout << "\nCommands list:\n";
-  std::cout << "    send <message>\n";
-  std::cout << "    sendto <recipient> <message>\n";
+  std::cout << "\nCommands:\n";
+  std::cout << "    message <message>\n";
+  std::cout << "    messageto <recipient> <message>\n";
   std::cout << "    status <status>\n";
-  std::cout << "    list\n";
+  std::cout << "    userList\n";
   std::cout << "    info <username>\n";
-  std::cout << "    stream\n";
+  std::cout << "    liveChat\n";
   std::cout << "    exit\n\n";
   std::cout << RESET;
 }
@@ -344,11 +344,11 @@ int main(int argc, char *argv[])
     {
       std::cout << "Invalid choice, please try again.\n";
     }
-    else if (words[0] == "send")
+    else if (words[0] == "message")
     {
       if (length < 2)
       {
-        std::cout << "Invalid command. Usage: send <message>\n";
+        std::cout << "Invalid command. Usage: message <message>\n";
         waiting_response = false;
       }
       else
@@ -357,11 +357,11 @@ int main(int argc, char *argv[])
         handleBroadcastMessage(sock, message);
       }
     }
-    else if (words[0] == "sendto")
+    else if (words[0] == "messageto")
     {
       if (length < 3)
       {
-        std::cout << "Invalid command. Usage: sendto <recipient> <message>\n";
+        std::cout << "Invalid command. Usage: messageto <recipient> <message>\n";
         waiting_response = false;
       }
       else
@@ -391,11 +391,11 @@ int main(int argc, char *argv[])
         }
       }
     }
-    else if (words[0] == "list")
+    else if (words[0] == "userList")
     {
       if (length != 1)
       {
-        std::cout << "Invalid command. Usage: list\n";
+        std::cout << "Invalid command. Usage: userList\n";
         waiting_response = false;
       }
       else
@@ -427,11 +427,11 @@ int main(int argc, char *argv[])
       }
       waiting_response = false;
     }
-    else if (words[0] == "stream")
+    else if (words[0] == "liveChat")
     {
       if (length != 1)
       {
-        std::cout << "Invalid command. Usage: stream\n";
+        std::cout << "Invalid command. Usage: liveChat\n";
       }
       else
       {
@@ -440,7 +440,7 @@ int main(int argc, char *argv[])
           flush_message_buffer();
         }
         streaming_mode = !streaming_mode;
-        std::cout << "Streaming mode: " << (streaming_mode ? "ON" : "OFF") << std::endl;
+        std::cout << "liveChat: " << (streaming_mode ? "ON" : "OFF") << std::endl;
         flush_message_buffer();
       }
       waiting_response = false;
