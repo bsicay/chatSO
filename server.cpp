@@ -51,9 +51,6 @@ void update_inactivity() {
     }
 }
 
-void handle_client(int client_sock); // Predeclaración de handle_client
-
-
 void send_broadcast_message(const chat::IncomingMessageResponse& message_response, int sender_sock) {
     std::lock_guard<std::mutex> lock(clients_mutex);
     for (const auto& session : client_sessions) {
@@ -74,6 +71,9 @@ void send_direct_message(const std::string& recipient, const chat::IncomingMessa
     }
 }
 
+
+void handle_client(int client_sock); // Predeclaración de handle_client
+
 void send_message_to_client(int client_sock, const chat::IncomingMessageResponse& message_response, chat::MessageType type) {
     chat::Response response;
     response.set_operation(chat::INCOMING_MESSAGE);
@@ -87,6 +87,34 @@ void send_message_to_client(int client_sock, const chat::IncomingMessageResponse
 }
 
 
+void handle_send_message(const chat::Request &request, int client_sock, chat::Operation operation)
+{
+  chat::Response response_to_sender;
+  response_to_sender.set_operation(operation);
+
+  chat::Response response_to_recipient;
+  response_to_recipient.set_operation(chat::Operation::INCOMING_MESSAGE);
+  chat::IncomingMessageResponse message_response = prepare_message_response(request, client_sock);
+
+  if (request.send_message().recipient().empty())
+  {
+    send_broadcast_message(message_response, client_sock);
+  }
+  else
+  {
+    int recipient_sock = find_recipient_socket(request.send_message().recipient());
+    if (recipient_sock != -1)
+    {
+      send_direct_message(response_to_sender, response_to_recipient, message_response, client_sock, recipient_sock);
+    }
+    else
+    {
+      response_to_sender.set_message("Recipient not found.");
+      response_to_sender.set_status_code(chat::StatusCode::BAD_REQUEST);
+      send_response(client_sock, response_to_sender);
+    }
+  }
+}
 
 /**
  * Función para manejar el registro de un usuario
