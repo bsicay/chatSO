@@ -98,16 +98,19 @@ void send_broadcast_message(const chat::IncomingMessageResponse& message_respons
     }
 }
 
-void send_direct_message(const std::string& recipient, const chat::IncomingMessageResponse& message_response, int sender_sock) {
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    auto it = std::find_if(client_sessions.begin(), client_sessions.end(),
-                           [&](const auto& pair) { return pair.second == recipient; });
-    if (it != client_sessions.end()) {
-        send_message_to_client(it->first, message_response, chat::MessageType::DIRECT);
-    } else {
-        // Enviar respuesta de error al remitente si el destinatario no existe
-    }
+void send_direct_message(chat::Response &response_to_sender, chat::Response &response_to_recipient, chat::IncomingMessageResponse &message_response, int client_sock, int recipient_sock)
+{
+  message_response.set_type(chat::MessageType::DIRECT);
+  response_to_recipient.set_message("Message incoming.");
+  response_to_recipient.set_status_code(chat::StatusCode::OK);
+  response_to_recipient.mutable_incoming_message()->CopyFrom(message_response);
+  send_response(recipient_sock, response_to_recipient);
+
+  response_to_sender.set_message("Message sent successfully.");
+  response_to_sender.set_status_code(chat::StatusCode::OK);
+  send_response(client_sock, response_to_sender);
 }
+
 
 
 void handle_client(int client_sock); // Predeclaración de handle_client
@@ -237,10 +240,10 @@ void handle_client(int client_sock) {
                 }
                 break;
             case chat::SEND_MESSAGE:
-                handle_send_message(request.send_message(), client_sock);
+                 handle_send_message(request, client_sock, chat::Operation::SEND_MESSAGE);
                 break;
             case chat::UPDATE_STATUS:
-                update_status(request.update_status(), client_sock);
+                 update_status(request, client_sock, chat::Operation::UPDATE_STATUS);
                 break;
             default:
                 break;
