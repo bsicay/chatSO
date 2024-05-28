@@ -52,10 +52,9 @@ void update_status(const chat::Request &request, int client_sock, chat::Operatio
 {
   auto status_request = request.update_status();
   update_user_status_and_time(client_sock, status_request);
-
   chat::Response response;
   response.set_operation(operation);
-  response.set_message("Status updated successfully."); // Consider replacing this with a constant or a configuration value
+  response.set_message("Status updated successfully."); 
   response.set_status_code(chat::StatusCode::OK);
   send_response(client_sock, response);
 }

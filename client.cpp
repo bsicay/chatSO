@@ -193,11 +193,14 @@ void handleDirectMessage(int sock, const std::string &recipient, const std::stri
   send_response(sock, request);
 }
 
+
 bool handleChangeStatus(int sock, const std::string &status)
 {
   chat::Request request;
   request.set_operation(chat::Operation::UPDATE_STATUS);
   auto *status_request = request.mutable_update_status();
+  status_request->set_username(username);
+
 
   if (status == "ONLINE")
   {
@@ -236,6 +239,8 @@ void handleGetUserInfo(int sock, const std::string &username)
   request.set_operation(chat::Operation::GET_USERS);
   auto *user_list = request.mutable_get_users();
   user_list->set_username(username);
+  status_request->set_username(username);
+
 
   send_response(sock, request);
 }
