@@ -30,9 +30,7 @@ int server_fd; // Descriptor del socket del servidor
 // Estructuras de datos para manejar usuarios y sesiones
 std::map<int, std::string> client_sessions; // Mapa de descriptores de socket a nombres de usuario
 std::map<std::string, std::string> user_details; // Mapa de nombres de usuario a direcciones IP
-
-std::mutex clients_mutex; // Mutex para controlar el acceso a las estructuras de datos compartidas
-
+std::mutex clients_mutex;  // Mutex para controlar el acceso a las estructuras de datos compartidas
 
 void signalHandler(int signum) {
     running = 0; // Establecer running a 0 cerrará el bucle principal
@@ -52,9 +50,14 @@ bool handle_registration(const chat::Request &request, int client_sock) {
 
     std::lock_guard<std::mutex> lock(clients_mutex);
 
+    // Log current user details
+    std::cout << "Current registered users:\n";
+    for (const auto& user : user_details) {
+        std::cout << "Username: " << user.first << ", IP: " << user.second << std::endl;
+    }
+
     chat::Response response;
     response.set_operation(chat::Operation::REGISTER_USER);
-    bool registered = false;
 
     // Obtener la dirección IP del cliente
     struct sockaddr_in addr;
@@ -66,12 +69,10 @@ bool handle_registration(const chat::Request &request, int client_sock) {
     } else {
         response.set_message("Unable to retrieve IP address.");
         response.set_status_code(chat::StatusCode::BAD_REQUEST);
-        send_response(client_sock, response); // Esta función debe ser implementada para enviar la respuesta
+        send_response(client_sock, response);
         return false;
     }
 
-    // Verificar si el nombre de usuario ya está registrado con cualquier dirección IP
-    std::cout << " user " << user_details << std::endl;
     if (user_details.find(username) != user_details.end()) {
         response.set_message("Username is already taken.");
         response.set_status_code(chat::StatusCode::BAD_REQUEST);
@@ -88,8 +89,6 @@ bool handle_registration(const chat::Request &request, int client_sock) {
     send_response(client_sock, response);
     return true;
 }
-
-
 /**
  * Función para manejar la conexión de un cliente
  */
