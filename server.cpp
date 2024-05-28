@@ -89,28 +89,28 @@ void update_inactivity() {
     }
 }
 
-void send_broadcast_message(const chat::IncomingMessageResponse &message_response, int client_sock)
-{
-  std::lock_guard<std::mutex> lock(clients_mutex);
+void send_broadcast_message(const chat::IncomingMessageResponse &message_response, int client_sock) {
+    std::lock_guard<std::mutex> lock(clients_mutex);
 
-  for (const auto &session : client_sessions)
-  {
-    if (session.first != client_sock)
-    { 
-      chat::Response response_to_recipient;
-      response_to_recipient.set_operation(chat::Operation::INCOMING_MESSAGE);
-      response_to_recipient.set_message("Broadcast message incoming.");
-      response_to_recipient.set_status_code(chat::StatusCode::OK);
-      response_to_recipient.mutable_incoming_message()->CopyFrom(message_response);
-      receive_request(session.first, response_to_recipient);
+    std::cout << "Broadcasting message from client socket " << client_sock << std::endl;
+
+    for (const auto &session : client_sessions) {
+        if (session.first != client_sock) { 
+            chat::Response response_to_recipient;
+            response_to_recipient.set_operation(chat::Operation::INCOMING_MESSAGE);
+            response_to_recipient.set_message("Broadcast message incoming.");
+            response_to_recipient.set_status_code(chat::StatusCode::OK);
+            response_to_recipient.mutable_incoming_message()->CopyFrom(message_response);
+            send_response(session.first, response_to_recipient);
+        }
     }
-  }
 
-  chat::Response response_to_sender;
-  response_to_sender.set_message("Broadcast message sent successfully.");
-  response_to_sender.set_status_code(chat::StatusCode::OK);
-  receive_request(client_sock, response_to_sender);
+    chat::Response response_to_sender;
+    response_to_sender.set_message("Broadcast message sent successfully.");
+    response_to_sender.set_status_code(chat::StatusCode::OK);
+    send_response(client_sock, response_to_sender);
 }
+
 
 void send_direct_message(chat::Response &response_to_sender, chat::Response &response_to_recipient, chat::IncomingMessageResponse &message_response, int client_sock, int recipient_sock)
 {
@@ -154,34 +154,33 @@ chat::IncomingMessageResponse prepare_message_response(const chat::Request &requ
   return message_response;
 }
 
-void handle_send_message(const chat::Request &request, int client_sock, chat::Operation operation)
-{
-  chat::Response response_to_sender;
-  response_to_sender.set_operation(operation);
+void handle_send_message(const chat::Request &request, int client_sock, chat::Operation operation) {
+    std::cout << "Handling send message from client socket " << client_sock << std::endl;
 
-  chat::Response response_to_recipient;
-  response_to_recipient.set_operation(chat::Operation::INCOMING_MESSAGE);
-  chat::IncomingMessageResponse message_response = prepare_message_response(request, client_sock);
+    chat::Response response_to_sender;
+    response_to_sender.set_operation(operation);
 
-  if (request.send_message().recipient().empty())
-  {
-    send_broadcast_message(message_response, client_sock);
-  }
-  else
-  {
-    int recipient_sock = find_recipient_socket(request.send_message().recipient());
-    if (recipient_sock != -1)
-    {
-      send_direct_message(response_to_sender, response_to_recipient, message_response, client_sock, recipient_sock);
+    chat::Response response_to_recipient;
+    response_to_recipient.set_operation(chat::Operation::INCOMING_MESSAGE);
+    chat::IncomingMessageResponse message_response = prepare_message_response(request, client_sock);
+
+    if (request.send_message().recipient().empty()) {
+        std::cout << "Sending broadcast message from client socket " << client_sock << std::endl;
+        send_broadcast_message(message_response, client_sock);
+    } else {
+        std::cout << "Sending direct message to " << request.send_message().recipient() << " from client socket " << client_sock << std::endl;
+        int recipient_sock = find_recipient_socket(request.send_message().recipient());
+        if (recipient_sock != -1) {
+            send_direct_message(response_to_sender, response_to_recipient, message_response, client_sock, recipient_sock);
+        } else {
+            std::cerr << "Recipient not found for direct message from socket " << client_sock << std::endl;
+            response_to_sender.set_message("Recipient not found.");
+            response_to_sender.set_status_code(chat::StatusCode::BAD_REQUEST);
+            send_response(client_sock, response_to_sender);
+        }
     }
-    else
-    {
-      response_to_sender.set_message("Recipient not found.");
-      response_to_sender.set_status_code(chat::StatusCode::BAD_REQUEST);
-      send_response(client_sock, response_to_sender);
-    }
-  }
 }
+
 
 /**
  * Función para manejar el registro de un usuario
@@ -240,28 +239,35 @@ bool handle_registration(const chat::Request &request, int client_sock) {
  */
 void handle_client(int client_sock) {
     bool running = true; 
+    std::cout << "Handling new client: Socket " << client_sock << std::endl;
     while (running) {
         chat::Request request;
         if (!receive_request(client_sock, request)) { // Función para recibir una solicitud
-            std::cerr << "Failed to read message from client. Closing connection." << std::endl;
+            std::cerr << "Failed to read message from client on socket " << client_sock << ". Closing connection." << std::endl;
             break;
         }
+
+        std::cout << "Received request type " << request.operation() << " from socket " << client_sock << std::endl;
+
         switch (request.operation()) {
             case chat::Operation::REGISTER_USER:
                 if (!handle_registration(request, client_sock)) {
-                    std::cerr << "Registration failed for client." << std::endl;
+                    std::cerr << "Registration failed for client on socket " << client_sock << std::endl;
                 }
                 break;
             case chat::Operation::SEND_MESSAGE:
-                 handle_send_message(request, client_sock, chat::Operation::SEND_MESSAGE);
+                handle_send_message(request, client_sock, chat::Operation::SEND_MESSAGE);
                 break;
             case chat::Operation::UPDATE_STATUS:
-                 update_status(request, client_sock, chat::Operation::UPDATE_STATUS);
+                update_status(request, client_sock, chat::Operation::UPDATE_STATUS);
                 break;
             default:
+                std::cerr << "Unknown operation received from socket " << client_sock << std::endl;
                 break;
         }
     }
+}
+
 
     // Cerrar la conexión y limpiar los datos de sesión
     close(client_sock);
