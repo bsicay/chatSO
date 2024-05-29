@@ -123,11 +123,10 @@ void update_inactivity() {
             {
                 if (user_status[username] != chat::UserStatus::OFFLINE)
                 {
-                    chat::Response response;
-                    response.set_operation(operation);
-                    response.set_message("User has been set to OFFLINE due to inactivity."); 
-                    response.set_status_code(chat::StatusCode::OK);
-                    send_response(client_sock, response);
+                    // chat::Response response;
+                    // response.set_operation(chat::Operation::UPDATE_STATUS);
+                    // response.set_message("User has been set to OFFLINE due to inactivity."); 
+                    // response.set_status_code(chat::StatusCode::OK);
                     user_status[username] = chat::UserStatus::OFFLINE;
                     std::cout << "User " << username << " has been set to OFFLINE due to inactivity." << std::endl;
                 }
