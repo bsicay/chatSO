@@ -111,7 +111,7 @@ void update_inactivity() {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         std::lock_guard<std::mutex> lock(clients_mutex);
-        auto now = std::chrono::steady_clock::now();  // Usando steady_clock aquí
+        auto now = std::chrono::steady_clock::now();
 
         for (auto &entry : last_active)
         {
@@ -123,6 +123,12 @@ void update_inactivity() {
             {
                 if (user_status[username] != chat::UserStatus::OFFLINE)
                 {
+                    auto status_request = request.update_status();
+                    chat::Response response;
+                    response.set_operation(operation);
+                    response.set_message("User has been set to OFFLINE due to inactivity."); 
+                    response.set_status_code(chat::StatusCode::OK);
+                    send_response(client_sock, response);
                     user_status[username] = chat::UserStatus::OFFLINE;
                     std::cout << "User " << username << " has been set to OFFLINE due to inactivity." << std::endl;
                 }
@@ -381,6 +387,12 @@ void handle_client(int client_sock) {
         if (!receive_request(client_sock, request)) { // Función para recibir una solicitud
             std::cerr << "Failed to read message from client. Closing connection." << std::endl;
             break;
+        }
+
+        // Actualizar la última actividad del usuario cada vez que se recibe una solicitud
+        std::lock_guard<std::mutex> lock(clients_mutex);
+        if (client_sessions.count(client_sock)) {
+            last_active[client_sessions[client_sock]] = std::chrono::steady_clock::now();
         }
         switch (request.operation()) {
             case chat::Operation::REGISTER_USER:
