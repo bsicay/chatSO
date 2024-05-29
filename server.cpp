@@ -88,8 +88,13 @@ void send_message_to_client(int client_sock, const chat::IncomingMessageResponse
 void update_inactivity() {
     std::lock_guard<std::mutex> lock(activity_mutex);
     for (auto& user : last_active) {
-        if (std::chrono::duration_cast<std::chrono::minutes>(std::chrono::steady_clock::now() - user.second).count() > AUTO_OFFLINE_SECONDS) {
-            // Aquí se podría establecer el estado a INACTIVO
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - last_activity).count() > AUTO_OFFLINE_SECONDS)
+        {
+            if (user_status[username] != chat::UserStatus::OFFLINE)
+            {
+            user_status[username] = chat::UserStatus::OFFLINE;
+            std::cout << "User " << username << " has been set to OFFLINE due to inactivity." << std::endl;
+            }
         }
     }
 }
