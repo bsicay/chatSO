@@ -38,6 +38,25 @@ std::map<std::string, std::chrono::steady_clock::time_point> last_active;
 std::mutex activity_mutex;
 
 
+void terminationHandler()
+{
+  std::string input;
+  while (true)
+  {
+    std::getline(std::cin, input);
+    if (input == "exit")
+    {
+      running = false;
+      break;
+    }
+  }
+
+  // Close the server socket
+  close(server_fd);
+  std::cout << "Server terminated." << std::endl;
+  exit(0); // Terminate the program
+}
+
 void update_user_status_and_time(int client_sock, const chat::UpdateStatusRequest &status_request)
 {
   std::lock_guard<std::mutex> lock(clients_mutex);
@@ -86,17 +105,28 @@ void send_message_to_client(int client_sock, const chat::IncomingMessageResponse
 
 // Función para actualizar la inactividad de los usuarios
 void update_inactivity() {
-    std::lock_guard<std::mutex> lock(activity_mutex);
-    for (auto& user : last_active) {
-        if (std::chrono::duration_cast<std::chrono::seconds>(now - last_activity).count() > AUTO_OFFLINE_SECONDS)
+   while (true)
+  {
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    std::lock_guard<std::mutex> lock(clients_mutex);
+    auto now = std::chrono::system_clock::now();
+
+    for (auto &entry : last_active)
+    {
+      const std::string &username = entry.first;
+      auto last_activity = entry.second;
+
+      if (std::chrono::duration_cast<std::chrono::seconds>(now - last_activity).count() > AUTO_OFFLINE_SECONDS)
+      {
+        if (user_status[username] != chat::UserStatus::OFFLINE)
         {
-            if (user_status[username] != chat::UserStatus::OFFLINE)
-            {
-            user_status[username] = chat::UserStatus::OFFLINE;
-            std::cout << "User " << username << " has been set to OFFLINE due to inactivity." << std::endl;
-            }
+          user_status[username] = chat::UserStatus::OFFLINE;
+          std::cout << "User " << username << " has been set to OFFLINE due to inactivity." << std::endl;
         }
+      }
     }
+  }
 }
 
 void send_broadcast_message(const chat::IncomingMessageResponse &message_response, int client_sock) {
@@ -425,6 +455,11 @@ int main(int argc, char *argv[]) {
     std::cout << server_name << " listening on port " << port << std::endl;
     std::cout << "Write 'exit' to terminate the server." << std::endl;
 
+    std::thread(monitor_user_activity).detach();
+
+    // Start the termination handler thread
+    std::thread terminator(terminationHandler);
+    terminator.detach();
     // Configuración del manejador de señales
     signal(SIGINT, signalHandler);
 
