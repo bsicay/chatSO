@@ -123,7 +123,6 @@ void update_inactivity() {
             {
                 if (user_status[username] != chat::UserStatus::OFFLINE)
                 {
-                    auto status_request = request.update_status();
                     chat::Response response;
                     response.set_operation(operation);
                     response.set_message("User has been set to OFFLINE due to inactivity."); 
