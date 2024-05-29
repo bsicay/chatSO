@@ -1,5 +1,4 @@
 /*
-*   Autores:
 *   Descripción:
 *           Programa que funge como servidor para el manejo de conexiones por medio de sockets
 *           de forma que se puedan manejar mensajes entre usuarios y otras funcionalidades.
@@ -23,6 +22,8 @@
 #include <unistd.h> // For ssize_t
 #include <cerrno>   // For errno
 #include "./messageUtil/constants.h"
+#include <chrono>
+#include <cstring> // For strerror
 
 
 // Declaración de variables globales
@@ -455,7 +456,7 @@ int main(int argc, char *argv[]) {
     std::cout << server_name << " listening on port " << port << std::endl;
     std::cout << "Write 'exit' to terminate the server." << std::endl;
 
-    std::thread(monitor_user_activity).detach();
+    std::thread(update_inactivity).detach();
 
     // Start the termination handler thread
     std::thread terminator(terminationHandler);
