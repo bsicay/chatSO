@@ -387,6 +387,13 @@ void handle_client(int client_sock) {
             break;
         }
 
+         {
+            std::lock_guard<std::mutex> lock(clients_mutex);
+            if (client_sessions.count(client_sock)) {
+                last_active[client_sessions[client_sock]] = std::chrono::steady_clock::now();
+            }
+        }
+
         switch (request.operation()) {
             case chat::Operation::REGISTER_USER:
                 if (!handle_registration(request, client_sock)) {
