@@ -106,29 +106,31 @@ void send_message_to_client(int client_sock, const chat::IncomingMessageResponse
 
 // Función para actualizar la inactividad de los usuarios
 void update_inactivity() {
-   while (true)
-  {
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    auto now = std::chrono::system_clock::now();
-
-    for (auto &entry : last_active)
+    while (true)
     {
-      const std::string &username = entry.first;
-      auto last_activity = entry.second;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
 
-      if (std::chrono::duration_cast<std::chrono::seconds>(now - last_activity).count() > AUTO_OFFLINE_SECONDS)
-      {
-        if (user_status[username] != chat::UserStatus::OFFLINE)
+        std::lock_guard<std::mutex> lock(clients_mutex);
+        auto now = std::chrono::steady_clock::now();  // Usando steady_clock aquí
+
+        for (auto &entry : last_active)
         {
-          user_status[username] = chat::UserStatus::OFFLINE;
-          std::cout << "User " << username << " has been set to OFFLINE due to inactivity." << std::endl;
+            const std::string &username = entry.first;
+            auto last_activity = entry.second;
+
+            // Asegúrate de que el intervalo calculado sea con el mismo tipo de reloj
+            if (std::chrono::duration_cast<std::chrono::seconds>(now - last_activity).count() > AUTO_OFFLINE_SECONDS)
+            {
+                if (user_status[username] != chat::UserStatus::OFFLINE)
+                {
+                    user_status[username] = chat::UserStatus::OFFLINE;
+                    std::cout << "User " << username << " has been set to OFFLINE due to inactivity." << std::endl;
+                }
+            }
         }
-      }
     }
-  }
 }
+
 
 void send_broadcast_message(const chat::IncomingMessageResponse &message_response, int client_sock) {
     std::lock_guard<std::mutex> lock(clients_mutex);
