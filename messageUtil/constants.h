@@ -8,7 +8,7 @@
 constexpr bool HANDLE_UNIQUE_IP = false;
 
 // Integer flag for handling auto offline status in seconds
-constexpr int AUTO_OFFLINE_SECONDS = 5;
+constexpr int AUTO_OFFLINE_SECONDS = 20;
 
 // Indicating the static size of the buffer
 constexpr size_t BUFFER_SIZE = 64 * 1024;
